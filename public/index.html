@@ -14,7 +14,7 @@
 </head>
 <body>
 
-<h1>記憶でおえかきゲーム!!</h1>
+<h1>記憶でおえかきゲーム</h1>
 
 <div id="entryForm" class="form">
   <h3>既存の部屋に入る</h3>
@@ -48,13 +48,14 @@
 <script>
 let currentRoom = "";
 let drawingEnabled = true;
+const phpBaseUrl = "https://games.72me.jp/painting-games/";
 
 async function joinRoom() {
   const roomId = document.getElementById("roomId").value.trim();
   const pass = document.getElementById("roomPass").value.trim();
   if (!roomId || !pass) return alert("ルームIDとパスワードを入力してください。");
 
-  const res = await fetch("joinRoom.php", {
+  const res = await fetch(phpBaseUrl + "joinRoom.php", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ roomId, password: pass })
@@ -75,7 +76,7 @@ async function createRoom() {
 
   if (!roomId || !pass || !topic) return alert("すべての項目を入力してください。");
 
-  const res = await fetch("createRoom.php", {
+  const res = await fetch(phpBaseUrl + "createRoom.php", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ roomId, password: pass, topic })
@@ -135,7 +136,7 @@ function startGame() {
 }
 
 async function loadGallery() {
-  const res = await fetch("getGallery.php?roomId=" + currentRoom);
+  const res = await fetch(phpBaseUrl + "getGallery.php?roomId=" + currentRoom);
   const data = await res.json();
   const gallery = document.getElementById("gallery");
   gallery.innerHTML = "";
@@ -152,7 +153,7 @@ window.uploadDrawing = async function () {
   if (!currentRoom) return alert("ルームに入室していません。");
   const canvas = document.getElementById("myCanvas");
   const imgData = canvas.toDataURL();
-  const res = await fetch("submitDrawing.php", {
+  const res = await fetch(phpBaseUrl + "submitDrawing.php", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ roomId: currentRoom, image: imgData })
