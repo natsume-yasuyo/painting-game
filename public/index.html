@@ -9,7 +9,7 @@
     .hidden { display: none; }
     .form { margin: 20px 0; }
     .tools { margin: 10px 0; }
-    input, button { padding: 6px; margin: 5px; }
+    input, button, select { padding: 6px; margin: 5px; }
   </style>
 </head>
 <body>
@@ -30,8 +30,18 @@
 
 <div id="gameArea" class="hidden">
   <h2>ルーム: <span id="roomLabel"></span></h2>
-  <h3>お題：<span id="topic">読み込み中...</span></h3>
-  <div id="timer">180</div>
+  <h3>お題：<span id="topic">スタート待機中...</span></h3>
+  <div id="timer"></div>
+
+  <div id="hostControls" class="hidden">
+    <h3>カテゴリを選んでスタート</h3>
+    <select id="topicCategory">
+      <option value="日本のアニメ">日本のアニメ</option>
+      <option value="食べ物">食べ物</option>
+      <option value="どうぶつ">どうぶつ</option>
+    </select>
+    <button onclick="startGame()">スタート</button>
+  </div>
 
   <div class="tools">
     色: <input type="color" id="penColor" value="#000000">
@@ -46,7 +56,7 @@
 
 <script>
 let currentRoom = "";
-let drawingEnabled = true;
+let drawingEnabled = false;
 const phpBaseUrl = "https://games.72me.jp/painting-games/";
 
 async function joinRoom() {
@@ -62,7 +72,7 @@ async function joinRoom() {
   const data = await res.json();
 
   if (data.success) {
-    enterRoom(roomId, data.topic);
+    enterRoom(roomId, false);
   } else {
     alert(data.message || "入室できませんでした");
   }
@@ -72,37 +82,52 @@ async function createRoom() {
   const roomId = document.getElementById("newRoomId").value.trim();
   const pass = document.getElementById("newRoomPass").value.trim();
 
-  // 新しいお題を取得
-  const topicRes = await fetch(phpBaseUrl + "getRandomTopic.php");
-  const topicData = await topicRes.json();
-  const topic = topicData.topic || "？？？";
-
   if (!roomId || !pass) return alert("すべての項目を入力してください。");
 
   const res = await fetch(phpBaseUrl + "createRoom.php", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ roomId, password: pass, topic })
+    body: JSON.stringify({ roomId, password: pass })
   });
   const data = await res.json();
 
   if (data.success) {
-    enterRoom(roomId, topic);
+    enterRoom(roomId, true);
   } else {
     alert(data.message || "部屋の作成に失敗しました");
   }
 }
 
-function enterRoom(roomId, topic) {
+function enterRoom(roomId, isHost = false) {
   currentRoom = roomId;
   document.getElementById("roomLabel").textContent = roomId;
   document.getElementById("entryForm").classList.add("hidden");
   document.getElementById("gameArea").classList.remove("hidden");
-  document.getElementById("topic").textContent = topic;
-  startGame();
+
+  if (isHost) {
+    document.getElementById("hostControls").classList.remove("hidden");
+  }
+
+  loadGallery();
 }
 
-function startGame() {
+// 例：userId を保存して送るようにする
+let userId = localStorage.getItem("userId");
+if (!userId) {
+  userId = "user-" + Math.random().toString(36).substr(2, 9);
+  localStorage.setItem("userId", userId);
+}
+
+async function startGame() {
+  const selectedCategory = document.getElementById("topicCategory").value;
+  const res = await fetch(phpBaseUrl + "getRandomTopic.php?category=" + encodeURIComponent(selectedCategory));
+  const data = await res.json();
+  const topic = data.topic || "？？？";
+
+  document.getElementById("topic").textContent = topic;
+  document.getElementById("hostControls").classList.add("hidden");
+  drawingEnabled = true;
+
   const canvas = document.getElementById("myCanvas");
   const ctx = canvas.getContext("2d");
   let drawing = false;
@@ -125,6 +150,7 @@ function startGame() {
 
   let timeLeft = 180;
   const timerEl = document.getElementById("timer");
+  timerEl.textContent = timeLeft;
   const timer = setInterval(() => {
     timeLeft--;
     timerEl.textContent = timeLeft;
@@ -135,7 +161,36 @@ function startGame() {
     }
   }, 1000);
 
-  loadGallery();
+  let intervalCheckStart = setInterval(async () => {
+    const res = await fetch(phpBaseUrl + "checkStart.php?roomId=" + currentRoom);
+    const data = await res.json();
+
+    if (data.startTime && !drawingEnabled) {
+      startTimerFrom(data.startTime, data.topic);
+      clearInterval(intervalCheckStart);
+    }
+  }, 2000);
+
+  function startTimerFrom(startTimeStr, topic) {
+    drawingEnabled = true;
+    document.getElementById("topic").textContent = topic;
+
+    const startTime = new Date(startTimeStr);
+    const endTime = new Date(startTime.getTime() + 180 * 1000); // 180秒後
+    const timerEl = document.getElementById("timer");
+
+    const timer = setInterval(() => {
+      const now = new Date();
+      const timeLeft = Math.floor((endTime - now) / 1000);
+      timerEl.textContent = timeLeft > 0 ? timeLeft : "時間終了！";
+
+      if (timeLeft <= 0) {
+        clearInterval(timer);
+        drawingEnabled = false;
+      }
+    }, 1000);
+  }
+
 }
 
 async function loadGallery() {
@@ -143,7 +198,8 @@ async function loadGallery() {
   const data = await res.json();
   const gallery = document.getElementById("gallery");
   gallery.innerHTML = "";
-  data.images.forEach(src => {
+  const images = Array.isArray(data.images) ? data.images : []; // ← nullやundefined対策
+  images.forEach(src => {
     const img = new Image();
     img.src = src;
     img.width = 200;
@@ -156,10 +212,11 @@ window.uploadDrawing = async function () {
   if (!currentRoom) return alert("ルームに入室していません。");
   const canvas = document.getElementById("myCanvas");
   const imgData = canvas.toDataURL();
+  const userId = localStorage.getItem("userId") || "guest";
   const res = await fetch(phpBaseUrl + "submitDrawing.php", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ roomId: currentRoom, image: imgData })
+    body: JSON.stringify({ roomId: currentRoom, image: imgData, userId: userId })
   });
   const data = await res.json();
   if (data.success) {

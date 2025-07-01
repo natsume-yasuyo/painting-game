@@ -10,10 +10,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 }
 
 // DB接続情報（あなたの環境にあわせて修正）
-$host = 'localhost';
-$dbname = 'your_database_name';
-$user = 'your_db_user';
-$pass = 'your_db_password';
+$host = 'mysql324.phy.lolipop.lan';
+$dbname = 'LAA1648452-painting';
+$user = 'LAA1648452';
+$pass = 'LpmHwzDLnz67MYK';
+$charset = 'utf8mb4';
 
 $category = $_GET['category'] ?? '';
 
