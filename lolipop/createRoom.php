@@ -23,10 +23,9 @@ header('Content-Type: application/json');
 $data = json_decode(file_get_contents("php://input"), true);
 $roomId = $data['roomId'] ?? '';
 $password = $data['password'] ?? '';
-$topic = $data['topic'] ?? '';
 
 // バリデーション
-if (!$roomId || !$password || !$topic) {
+if (!$roomId || !$password) {
     echo json_encode(['success' => false, 'message' => '入力が不足しています']);
     exit;
 }

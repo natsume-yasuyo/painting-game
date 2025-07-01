@@ -9,7 +9,7 @@
     .hidden { display: none; }
     .form { margin: 20px 0; }
     .tools { margin: 10px 0; }
-    input, button, select { padding: 6px; margin: 5px; }
+    input, button { padding: 6px; margin: 5px; }
   </style>
 </head>
 <body>
@@ -30,18 +30,8 @@
 
 <div id="gameArea" class="hidden">
   <h2>ルーム: <span id="roomLabel"></span></h2>
-  <h3>お題：<span id="topic">スタート待機中...</span></h3>
-  <div id="timer"></div>
-
-  <div id="hostControls" class="hidden">
-    <h3>カテゴリを選んでスタート</h3>
-    <select id="topicCategory">
-      <option value="アニメ">アニメ</option>
-      <option value="食べ物">食べ物</option>
-      <option value="どうぶつ">どうぶつ</option>
-    </select>
-    <button onclick="startGame()">スタート</button>
-  </div>
+  <h3>お題：<span id="topic">読み込み中...</span></h3>
+  <div id="timer">180</div>
 
   <div class="tools">
     色: <input type="color" id="penColor" value="#000000">
@@ -56,7 +46,7 @@
 
 <script>
 let currentRoom = "";
-let drawingEnabled = false;
+let drawingEnabled = true;
 const phpBaseUrl = "https://games.72me.jp/painting-games/";
 
 async function joinRoom() {
@@ -72,7 +62,7 @@ async function joinRoom() {
   const data = await res.json();
 
   if (data.success) {
-    enterRoom(roomId, false);
+    enterRoom(roomId, data.topic);
   } else {
     alert(data.message || "入室できませんでした");
   }
@@ -82,45 +72,37 @@ async function createRoom() {
   const roomId = document.getElementById("newRoomId").value.trim();
   const pass = document.getElementById("newRoomPass").value.trim();
 
+  // 新しいお題を取得
+  const topicRes = await fetch(phpBaseUrl + "getRandomTopic.php");
+  const topicData = await topicRes.json();
+  const topic = topicData.topic || "？？？";
+
   if (!roomId || !pass) return alert("すべての項目を入力してください。");
 
   const res = await fetch(phpBaseUrl + "createRoom.php", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ roomId, password: pass })
+    body: JSON.stringify({ roomId, password: pass, topic })
   });
   const data = await res.json();
 
   if (data.success) {
-    enterRoom(roomId, true);
+    enterRoom(roomId, topic);
   } else {
     alert(data.message || "部屋の作成に失敗しました");
   }
 }
 
-function enterRoom(roomId, isHost = false) {
+function enterRoom(roomId, topic) {
   currentRoom = roomId;
   document.getElementById("roomLabel").textContent = roomId;
   document.getElementById("entryForm").classList.add("hidden");
   document.getElementById("gameArea").classList.remove("hidden");
-
-  if (isHost) {
-    document.getElementById("hostControls").classList.remove("hidden");
-  }
-
-  loadGallery();
+  document.getElementById("topic").textContent = topic;
+  startGame();
 }
 
-async function startGame() {
-  const selectedCategory = document.getElementById("topicCategory").value;
-  const res = await fetch(phpBaseUrl + "getRandomTopic.php?category=" + encodeURIComponent(selectedCategory));
-  const data = await res.json();
-  const topic = data.topic || "？？？";
-
-  document.getElementById("topic").textContent = topic;
-  document.getElementById("hostControls").classList.add("hidden");
-  drawingEnabled = true;
-
+function startGame() {
   const canvas = document.getElementById("myCanvas");
   const ctx = canvas.getContext("2d");
   let drawing = false;
@@ -143,7 +125,6 @@ async function startGame() {
 
   let timeLeft = 180;
   const timerEl = document.getElementById("timer");
-  timerEl.textContent = timeLeft;
   const timer = setInterval(() => {
     timeLeft--;
     timerEl.textContent = timeLeft;
@@ -153,6 +134,8 @@ async function startGame() {
       timerEl.textContent = "時間終了！";
     }
   }, 1000);
+
+  loadGallery();
 }
 
 async function loadGallery() {
